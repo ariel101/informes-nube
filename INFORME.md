@@ -1,5 +1,10 @@
 # Informe de Avance - Proyecto Final Cloud Computing
 
+## Aplicacion Web proyecto
+
+- [Ver repositorio app web](https://github.com/ariel101/fabrica_textil)
+
+
 ## Información General
 
 | Campo | Valor |
@@ -176,27 +181,24 @@ Las instancias privadas no contaban con salida a Internet debido a la ausencia d
 ## Conectividad SSH
 
 ```bash
-ssh -i laravel-base-ssh-key.pem ubuntu@IP_PUBLICA
+ssh -i laravel-base-ssh-key.pem ubuntu@98.92.176.88
 ```
 
 ```bash
 eval "$(ssh-agent -s)"
 ssh-add laravel-base-ssh-key.pem
-ssh -A ubuntu@IP_PUBLICA
+ssh -A ubuntu@98.92.176.88
 ```
 
 ```bash
-ssh ubuntu@IP_PRIVADA_MYSQL
+ssh ubuntu@10.0.128.237
 ```
 
 ## Verificación de Red
 
-```bash
-ping 10.0.141.111
-```
 
 ```bash
-nc -zv 10.0.141.111 22
+nc -zv 10.0.128.237 22
 ```
 
 ```bash
@@ -315,7 +317,8 @@ sudo systemctl restart php8.5-fpm
 
 ## 7.8 Conectividad SSH Bastion
 
-![SSH Bastion](./capturas/bastioToServer.png)
+![SSH Bastion](./capturas/bastion1.png)
+![SSH Bastion](./capturas/bastion2.png)
 
 ---
 
