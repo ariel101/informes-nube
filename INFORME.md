@@ -5,7 +5,7 @@
 | Campo | Valor |
 |---------|---------|
 | Proyecto | Plataforma Web Laravel + MySQL Alta Disponibilidad |
-| Integrantes | [Completar] |
+| Integrantes | Cayo Vargas Ariel Nelzon |
 | Fecha de actualización | 27/05/2026 |
 | Región AWS | us-east-1 |
 | Estado General | En desarrollo |
@@ -44,7 +44,7 @@
 
 ### Arquitectura Actual
 
-![Arquitectura AWS](./imagenes/arquitectura-actual.png)
+![Arquitectura AWS](./capturas/arquitecturaAWS.png)
 
 > Reemplazar por la imagen final del diagrama.
 
@@ -70,7 +70,6 @@
 
 **Fecha:** 25/05/2026
 
-**Responsable:** [Nombre]
 
 **Actividad realizada:**
 
@@ -90,7 +89,6 @@ Comprensión de la segmentación de red entre componentes públicos y privados d
 
 **Fecha:** 26/05/2026
 
-**Responsable:** [Nombre]
 
 **Actividad realizada:**
 
@@ -110,7 +108,6 @@ No era posible conectarse inicialmente a la instancia MySQL privada debido a pro
 
 **Fecha:** 27/05/2026
 
-**Responsable:** [Nombre]
 
 **Actividad realizada:**
 
@@ -274,67 +271,67 @@ sudo systemctl restart php8.5-fpm
 
 ## 7.1 VPC
 
-![VPC](./imagenes/vpc.png)
+![VPC](./capturas/vpc.png)
 
 ---
 
 ## 7.2 Subredes
 
-![Subredes](./imagenes/subredes.png)
+![Subredes](./capturas/subredes1.png)
+![Subredes](./capturas/subredes2.png)
 
 ---
 
 ## 7.3 Tabla de Rutas
 
-![Tabla de rutas](./imagenes/rutas.png)
+![Tabla de rutas](./capturas/tablaEnrutamiento.png)
 
 ---
 
 ## 7.4 Security Groups
 
-![Security Groups](./imagenes/security-groups.png)
+![Security Groups](./capturas/sg-groups1.png)
+![Security Groups](./capturas/sg-groups2.png)
 
 ---
 
 ## 7.5 Instancia Laravel
 
-![Laravel EC2](./imagenes/laravel-ec2.png)
+![Laravel EC2](./capturas/laravel-base-ec2.png)
 
 ---
 
 ## 7.6 Instancia MySQL Base
 
-![MySQL Base](./imagenes/mysql-base.png)
+![MySQL Base](./capturas/mysql-base-ec2.png)
 
 ---
 
 ## 7.7 Instancia MySQL Replica
 
-![MySQL Replica](./imagenes/mysql-replica.png)
+![MySQL Replica](./capturas/mysql-replica-ec2.png)
 
 ---
 
 ## 7.8 Conectividad SSH Bastion
 
-![SSH Bastion](./imagenes/ssh-bastion.png)
+![SSH Bastion](./capturas/bastioToServer.png)
 
 ---
 
 ## 7.9 Migraciones Laravel
 
-![Migraciones](./imagenes/migraciones.png)
+![Migraciones](./capturas/migrationDB.png)
 
 ---
 
 ## 7.10 Aplicación Ejecutándose
 
-![Aplicación Laravel](./imagenes/app-funcionando.png)
+![Aplicación Laravel](./capturas/aplicacionEjecutandose.png)
 
 ---
 
-## 7.11 Nginx Operativo
 
-![Nginx](./imagenes/nginx.png)
 
 ---
 
