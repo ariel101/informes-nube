@@ -147,7 +147,7 @@ Actions → Attach to VPC → fabrica-textil-vpc
 
 | Campo | Subred Pública | Subred Privada A | Subred Privada B |
 |-------|---------------|-----------------|-----------------|
-| VPC | fabrica-textil-vpc | fabrica-textil-vpc | fabrica-textil-vpc |
+| VPC | proyecto-final-public1 | proyecto-final-private1 | proyecto-final-private2 |
 | Availability Zone | us-east-1a | us-east-1a | us-east-1b |
 | IPv4 CIDR | `10.0.0.0/20` | `10.0.128.0/20` | `10.0.144.0/20` |
 
@@ -161,7 +161,7 @@ Habilitar **Auto-assign public IPv4** en la subred pública:
 | Destino | Target |
 |---------|--------|
 | `10.0.0.0/16` | local |
-| `0.0.0.0/0` | fabrica-textil-igw |
+| `0.0.0.0/0` | proyecto-final-igw |
 
 **Tablas de rutas privadas** (una por subred privada):
 
@@ -195,38 +195,47 @@ Se definieron tres security groups siguiendo el principio de **mínimo privilegi
 | HTTP | 80 | `0.0.0.0/0` | Tráfico público entrante |
 | HTTPS | 443 | `0.0.0.0/0` | Tráfico público TLS |
 
-### sg-laravel (Instancias EC2 Laravel)
+### SG-Laravel (Instancias EC2 Laravel)
 
 | Tipo | Puerto | Origen | Descripción |
 |------|--------|--------|-------------|
 | SSH | 22 | IP personal | Acceso administración / Bastion |
-| HTTP | 80 | sg-alb | Solo desde el ALB |
-| HTTPS | 443 | sg-alb | Solo desde el ALB |
+| HTTP | 80 | `0.0.0.0/0` | Solo desde el ALB |
+| HTTPS | 443 | `0.0.0.0/0` | Solo desde el ALB |
 
-### sg-mysql (Instancias MySQL)
+![Security Groups](./capturas/sg-group-laravel.png)
+
+### SG-Mysql (Instancias MySQL)
 
 | Tipo | Puerto | Origen | Descripción |
 |------|--------|--------|-------------|
-| MySQL/Aurora | 3306 | sg-laravel | Solo desde instancias Laravel |
-| SSH | 22 | sg-laravel | Acceso vía Bastion |
+| MySQL/Aurora | 3306 | SG-Laravel | Solo desde instancia Laravel |
+| SSH | 22 | SG-Laravel | Acceso vía Bastion |
+| MySQL/Aurora | 3306 | SG-Mysql-replica | Solo desde instancia mysql replica |
 
+![Security Groups](./capturas/sg-groups-mysqlMaster.png)
+
+### SG-Mysql-replica (Instancias MySQL)
+
+| Tipo | Puerto | Origen | Descripción |
+|------|--------|--------|-------------|
+| MySQL/Aurora | 3306 | SG-Laravel | Solo desde instancia Laravel |
+| SSH | 22 | SG-Laravel | Acceso vía Bastion |
+
+![Security Groups](./capturas/sg-groups-mysqlReplica.png)
 ---
 
-> 📸 Evidencias:
-
-![Security Groups](./capturas/sg-groups1.png)
-![Security Groups](./capturas/sg-groups2.png)
 
 ---
 
 ## Paso 3 — Bastion Host y Acceso SSH
 
-La instancia Laravel en la subred pública actúa como **Bastion Host** para saltar a las instancias MySQL en subredes privadas. No se desplegó un NAT Gateway para reducir costos — en su lugar se usó una AMI preconfigurada (ver Paso 4).
+La instancia **Bastion** en la subred pública actúa como **Bastion Host** para saltar a las instancias MySQL en subredes privadas. No se desplegó un NAT Gateway para reducir costos — en su lugar se usó una AMI preconfigurada (ver Paso 4).
 
-### Acceso directo a Laravel (Bastion)
+### Acceso directo a Instancia Bastion (Bastion)
 
 ```bash
-ssh -i laravel-base-ssh-key.pem ubuntu@<IP_PUBLICA_LARAVEL>
+ssh -i laravel-base-ssh-key.pem ubuntu@98.92.222.80
 ```
 
 ### Acceso a MySQL privado vía SSH Agent Forwarding
@@ -237,10 +246,13 @@ eval "$(ssh-agent -s)"
 ssh-add laravel-base-ssh-key.pem
 
 # Conectar al Bastion con reenvío de agente (-A)
-ssh -A ubuntu@<IP_PUBLICA_LARAVEL>
+ssh -A ubuntu@98.92.222.80
 
-# Desde el Bastion, saltar a la instancia MySQL privada
+# Desde el Bastion, saltar a la instancia mysql-base privada
 ssh ubuntu@10.0.128.237
+
+# Desde el Bastion, saltar a la instancia mysql-replica privada 
+ssh ubuntu@10.0.147.213
 ```
 
 > Con `-A` (Agent Forwarding), la clave privada nunca sale de la máquina local — el agente autentica los saltos intermedios de forma transparente.
@@ -485,10 +497,10 @@ DB_USERNAME=laravel_user
 DB_PASSWORD=password_seguro
 
 FILESYSTEM_DISK=s3
-AWS_BUCKET=fabrica-textil-productos
+AWS_BUCKET=fabrica-textil-imagenes
 AWS_DEFAULT_REGION=us-east-1
 # AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY no son necesarios
-# si la instancia EC2 tiene un IAM Role adjunto
+# la instancia EC2 tiene un IAM Role adjunto
 ```
 
 ### 6.4 Migraciones y optimizaciones
@@ -511,20 +523,19 @@ php artisan view:cache
 server {
     listen 80;
     server_name _;
+
     root /var/www/fabrica_textil/public;
     index index.php;
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
+    charset utf-8;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
     location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php8.5-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
     }
 
     location ~ /\.(?!well-known).* {
@@ -561,9 +572,10 @@ Una vez la instancia Laravel está completamente configurada y funcionando, se g
 EC2 → Instancias → [instancia Laravel configurada]
 → Actions → Image and templates → Create image
 
-  Image name:  laravel-app-ami-v1
+  Image name:  laravel-prod-v1
   No reboot:   ✓
 ```
+![AMI](./capturas/laravel-prod-v1.png)
 
 ### 7.2 Crear Target Group
 
@@ -577,12 +589,14 @@ EC2 → Target Groups → Create Target Group
 | Name | `tg-laravel-app` |
 | Protocol | HTTP |
 | Port | 80 |
-| VPC | fabrica-textil-vpc |
+| VPC | proyecto-final-vpc |
 | Health check protocol | HTTP |
 | Health check path | `/` |
 | Healthy threshold | 2 |
 | Unhealthy threshold | 3 |
 | Interval | 30 segundos |
+
+![target group](./capturas/tg-laravel.png)
 
 ### 7.3 Crear Application Load Balancer
 
@@ -592,10 +606,10 @@ EC2 → Load Balancers → Create Load Balancer → Application Load Balancer
 
 | Campo | Valor |
 |-------|-------|
-| Name | `alb-fabrica-textil` |
+| Name | `laravel-alb` |
 | Scheme | Internet-facing |
 | IP address type | IPv4 |
-| VPC | fabrica-textil-vpc |
+| VPC | proyecto-final |
 | Availability Zones | us-east-1a (public-subnet-1a), us-east-1b |
 | Security Groups | sg-alb |
 
@@ -603,7 +617,9 @@ EC2 → Load Balancers → Create Load Balancer → Application Load Balancer
 
 | Protocolo | Puerto | Acción |
 |-----------|--------|--------|
-| HTTP | 80 | Forward → `tg-laravel-app` |
+| HTTP | 80 | Forward → `tg-laravel` |
+
+![ALB](./capturas/laravel-alb.png)
 
 > El listener HTTPS (443) se configurará al agregar el dominio y el certificado ACM.
 
