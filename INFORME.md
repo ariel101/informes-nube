@@ -1,6 +1,6 @@
 # 🏭 Fábrica Textil — Plataforma Web Laravel en AWS con Alta Disponibilidad
 
-> Proyecto Final — Cloud Computing  
+> Proyecto Final — Trabajando en la Nube  
 > Alumno: **Cayo Vargas Ariel Nelzon** | Región: `us-east-1`
 
 [![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=flat&logo=laravel&logoColor=white)](https://laravel.com)
@@ -1164,9 +1164,9 @@ php artisan config:cache
 VPC: 10.0.0.0/16  (us-east-1)
 │
 ├── Subred Pública   10.0.0.0/20    us-east-1a  ──► IGW ──► Internet
-│     ├── ALB (alb-fabrica-textil)
-│     ├── EC2 Laravel #1 (Bastion + App)
-│     └── EC2 Laravel #2 (ASG)
+│     ├── ALB (laravel-alb)
+│     ├── EC2 Bastion (Bastion)
+│     └── EC2 Laravel  (app-asg)
 │
 ├── Subred Privada A 10.0.128.0/20  us-east-1a  (sin salida internet)
 │     └── EC2 MySQL Master
