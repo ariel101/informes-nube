@@ -623,7 +623,7 @@ EC2 → Load Balancers → Create Load Balancer → Application Load Balancer
 
 > El listener HTTPS (443) se configurará al agregar el dominio y el certificado ACM.
 
-El ALB distribuye el tráfico entre las instancias registradas en `tg-laravel-app` mediante round-robin, con health checks periódicos para excluir instancias no saludables.
+El ALB distribuye el tráfico entre las instancias registradas en `tg-laravel` mediante round-robin, con health checks periódicos para excluir instancias no saludables.
 
 ---
 
@@ -645,11 +645,11 @@ EC2 → Launch Templates → Create launch template
 
 | Campo | Valor |
 |-------|-------|
-| Name | `lt-laravel-app` |
-| AMI | laravel-app-ami-v1 |
-| Instance type | `t2.micro` |
+| Name | `LT-laravel` |
+| AMI | laravel-prod-v1 |
+| Instance type | `t3.micro` |
 | Key pair | laravel-base-ssh-key |
-| Security Groups | sg-laravel |
+| Security Groups | SG-Laravel |
 
 **User Data** (script ejecutado al lanzar cada nueva instancia):
 
@@ -684,15 +684,17 @@ EC2 → Auto Scaling Groups → Create Auto Scaling Group
 
 | Campo | Valor |
 |-------|-------|
-| Name | `asg-laravel-app` |
-| Launch Template | lt-laravel-app |
-| VPC | fabrica-textil-vpc |
+| Name | `ASG-laravel` |
+| Launch Template | LT-laravel |
+| VPC | proyecto-final-vpc |
 | Subnets | public-subnet-1a, public-subnet-1b |
-| Load balancing | Attach to existing ALB → `tg-laravel-app` |
+| Load balancing | Attach to existing ALB → `tg-laravel` |
 | Health check type | ELB |
 | Desired capacity | 2 |
 | Minimum capacity | 1 |
-| Maximum capacity | 4 |
+| Maximum capacity | 2 |
+
+![ALB](./capturas/asg-creado.png)
 
 **Política de escalado — Target Tracking:**
 
@@ -705,12 +707,6 @@ EC2 → Auto Scaling Groups → Create Auto Scaling Group
 > Con esta configuración, cuando la CPU promedio supera el 70%, el ASG lanza nuevas instancias automáticamente desde la AMI de Laravel. Cuando baja del umbral, las elimina para reducir costos.
 
 ---
-
-> 📸 Evidencias:
-
-<!-- Agregar imagen: ./capturas/asg.png -->
-
-<!-- Agregar imagen: ./capturas/asg-launch-template.png -->
 
 ---
 
@@ -775,39 +771,29 @@ Política con mínimo privilegio para despliegue y acceso a S3:
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "S3ProductImages",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::fabrica-textil-productos",
-        "arn:aws:s3:::fabrica-textil-productos/*"
-      ]
-    },
-    {
-      "Sid": "EC2Deploy",
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeInstances",
-        "ssm:SendCommand",
-        "ssm:GetCommandInvocation"
-      ],
-      "Resource": "*"
-    }
-  ]
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "S3Access",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::fabrica-textil-imagenes",
+                "arn:aws:s3:::fabrica-textil-imagenes/*"
+            ]
+        }
+    ]
 }
 ```
 
 Anotar el **ARN del Role**:
 ```
-arn:aws:iam::123456789012:role/github-actions-fabrica-textil
+arn:aws:iam::787008631548:role/github-actions-oidc
 ```
 
 ### 9.4 Configurar el workflow de GitHub Actions
@@ -815,48 +801,55 @@ arn:aws:iam::123456789012:role/github-actions-fabrica-textil
 `.github/workflows/deploy.yml`:
 
 ```yaml
-name: Deploy to AWS
+name: Deploy EC2
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
-  id-token: write   # Requerido para solicitar el JWT OIDC
+  id-token: write
   contents: read
+
+env:
+  AWS_REGION: us-east-1
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout código
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configurar credenciales AWS via OIDC
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::123456789012:role/github-actions-fabrica-textil
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions
 
-      # A partir de aquí las credenciales están disponibles en el entorno
-      # sin ninguna clave estática almacenada
-
-      - name: Verificar identidad asumida
+      - name: Verify OIDC Authentication
         run: aws sts get-caller-identity
 
-      - name: Sincronizar assets a S3 (opcional)
+      - name: Create SSH Key
         run: |
-          aws s3 sync public/build/ s3://fabrica-textil-productos/assets/ \
-            --delete \
-            --cache-control "public, max-age=31536000"
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
+          chmod 600 key.pem
 
-      - name: Desplegar en instancias via SSM
+      - name: Add EC2 Host Key
         run: |
-          aws ssm send-command \
-            --targets "Key=tag:aws:autoscaling:groupName,Values=asg-laravel-app" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["cd /var/www/fabrica_textil && git pull && composer install --no-dev && php artisan migrate --force && php artisan config:cache"]'
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy Application
+        run: |
+          ssh -i key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            cd /var/www/fabrica_textil
+
+            git pull origin main
+          EOF
 ```
 
 > **Flujo de autenticación OIDC:**
@@ -869,11 +862,11 @@ jobs:
 
 > 📸 Evidencias:
 
-<!-- Agregar imagen: ./capturas/oidc-provider.png -->
+![OIDC](./capturas/oidc.png)
 
-<!-- Agregar imagen: ./capturas/iam-role-oidc.png -->
+![role-OIDC](./capturas/role-oidc.png)
 
-<!-- Agregar imagen: ./capturas/github-actions-deploy.png -->
+![github-actions-deploy](./capturas/github-actions-deploy.png)
 
 ---
 
@@ -889,12 +882,12 @@ S3 → Create bucket
 
 | Campo | Valor |
 |-------|-------|
-| Bucket name | `fabrica-textil-productos` |
+| Bucket name | `fabrica-textil-imagenes` |
 | Region | `us-east-1` |
-| Block all public access | ✓ Activado |
+| Block all public access | ✓ desactivado |
 | Versioning | Desactivado (opcional activar) |
 
-> El bucket es **privado**. Las imágenes se sirven mediante **presigned URLs** generadas por Laravel — nunca se expone el bucket directamente.
+> El bucket es **publica**. Las imágenes se pueden visualizar directamente por que no estan restringidos por que simplemente es para guardar imagenes de productos que no son sensibles
 
 ### 10.2 IAM Role para EC2 → S3 (Instance Profile)
 
@@ -910,22 +903,23 @@ IAM → Roles → Create role
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::fabrica-textil-productos",
-        "arn:aws:s3:::fabrica-textil-productos/*"
-      ]
-    }
-  ]
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "S3Access",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::fabrica-textil-imagenes",
+                "arn:aws:s3:::fabrica-textil-imagenes/*"
+            ]
+        }
+    ]
 }
 ```
 
@@ -958,7 +952,7 @@ composer require league/flysystem-aws-s3-v3 --with-all-dependencies
 
 ```env
 FILESYSTEM_DISK=s3
-AWS_BUCKET=fabrica-textil-productos
+AWS_BUCKET=fabrica-textil-imagenes
 AWS_DEFAULT_REGION=us-east-1
 ```
 
@@ -1013,12 +1007,11 @@ public function destroy(Producto $producto)
 ### Estructura de prefijos en el bucket
 
 ```
-fabrica-textil-productos/
-├── productos/          ← imágenes de productos textiles
-│   ├── abc123.jpg
-│   └── def456.webp
-└── assets/             ← assets compilados (opcional, via CI/CD)
-    └── app-xxxxx.js
+fabrica-textil-imagenes/
+├── images/          ← imágenes de productos textiles
+    ├── abc123.jpg
+    └── def456.webp
+
 ```
 
 ---
