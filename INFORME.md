@@ -213,7 +213,7 @@ Se definieron tres security groups siguiendo el principio de **mínimo privilegi
 | SSH | 22 | SG-Laravel | Acceso vía Bastion |
 | MySQL/Aurora | 3306 | SG-Mysql-replica | Solo desde instancia mysql replica |
 
-![Security Groups](./capturas/sg-groups-mysqlMaster.png)
+![Security Groups](./capturas/sg-group-mysqlMaster.png)
 
 ### SG-Mysql-replica (Instancias MySQL)
 
@@ -222,7 +222,7 @@ Se definieron tres security groups siguiendo el principio de **mínimo privilegi
 | MySQL/Aurora | 3306 | SG-Laravel | Solo desde instancia Laravel |
 | SSH | 22 | SG-Laravel | Acceso vía Bastion |
 
-![Security Groups](./capturas/sg-groups-mysqlReplica.png)
+![Security Groups](./capturas/sg-group-mysqlReplica.png)
 ---
 
 
@@ -1140,21 +1140,21 @@ php artisan config:cache
 
 ---
 
-### Entrada 4 — (completar fecha)
+### Entrada 4 — 29/05/2026
 
 **Actividades:** Creación de AMI de Laravel, configuración de Target Group con health checks, despliegue del Application Load Balancer en dos zonas de disponibilidad, creación del Auto Scaling Group con Launch Template y política de Target Tracking (CPU 70%).
 
 ---
 
-### Entrada 5 — (completar fecha)
+### Entrada 5 — 06/06/2026
 
 **Actividades:** Configuración de OIDC entre GitHub Actions y AWS IAM. Creación del Identity Provider OIDC en IAM apuntando a `token.actions.githubusercontent.com`, definición del IAM Role con trust policy restringida al repositorio `ariel101/fabrica_textil`, implementación del workflow de despliegue sin credenciales estáticas usando el ARN del Role.
 
 ---
 
-### Entrada 6 — (completar fecha)
+### Entrada 6 — 12/06/2026
 
-**Actividades:** Creación del bucket S3 `fabrica-textil-productos` con acceso privado, configuración del IAM Instance Profile para acceso EC2 → S3 sin credenciales en código, integración con Laravel Filesystem (driver S3), implementación de subida de imágenes de productos textiles y generación de presigned URLs para acceso seguro.
+**Actividades:** Creación del bucket S3 `fabrica-textil-imagenes` con acceso publico, configuración del IAM Instance Profile para acceso EC2 → S3 sin credenciales en código, integración con Laravel Filesystem (driver S3), implementación de subida de imágenes de productos textiles y generación de presigned URLs para acceso seguro.
 
 ---
 
