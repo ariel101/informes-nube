@@ -4,4 +4,4 @@
 
 Puedes encontrar el informe completo con capturas de pantalla y evidencias en el siguiente enlace:
 
-- [Ver informe del segundo parcial](./INFORME.md)
+- [Ver informe del examen final](./INFORME.md)

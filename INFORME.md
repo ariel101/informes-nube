@@ -710,7 +710,7 @@ EC2 → Auto Scaling Groups → Create Auto Scaling Group
 
 ---
 
-## Paso 9 — Autenticación OIDC para GitHub Actions
+## Paso 9 — Autenticación e Integración CI/CD Inmutable mediante AWS SSM y OIDC
 
 En lugar de almacenar credenciales de AWS (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) como secrets en GitHub, se implementó autenticación mediante **OpenID Connect (OIDC)**. GitHub Actions solicita un token JWT firmado por GitHub al proveedor OIDC de AWS (IAM), y AWS valida ese token para asumir un IAM Role con los permisos necesarios. **No se manejan claves estáticas.**
 
@@ -801,7 +801,7 @@ arn:aws:iam::787008631548:role/github-actions-oidc
 `.github/workflows/deploy.yml`:
 
 ```yaml
-name: Deploy EC2
+name: Deploy to EC2 via AWS SSM
 
 on:
   push:
@@ -823,33 +823,51 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials (OIDC)
+      # 1. Autenticación con AWS vía OIDC
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           role-session-name: github-actions
 
-      - name: Verify OIDC Authentication
-        run: aws sts get-caller-identity
-
-      - name: Create SSH Key
+      # 2. Enviar el comando de despliegue a través de SSM Run Command
+      - name: Execute Remote Commands via SSM
         run: |
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
-          chmod 600 key.pem
-
-      - name: Add EC2 Host Key
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy Application
-        run: |
-          ssh -i key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-            cd /var/www/fabrica_textil
-
-            git pull origin main
-          EOF
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:App,Values=fabrica_textil" \
+            --comment "Despliegue Laravel + Vue desde GitHub Actions" \
+            --parameters 'commands=[
+              "cd /var/www/fabrica_textil",
+              "sudo -u ubuntu git fetch origin main",
+              "sudo -u ubuntu git reset --hard origin/main",
+              "sudo -u ubuntu npm run build",
+              "sudo -u ubuntu php artisan optimize:clear",
+              "sudo -u ubuntu php artisan optimize",
+              "sudo chmod -R 775 storage bootstrap/cache",
+              "sudo chown -R ubuntu:www-data storage bootstrap/cache",
+              "sudo systemctl reload \"php*-fpm\""
+            ]' \
+            --query "Command.CommandId" \
+            --output text)
+          
+          echo "Comando SSM enviado con ID: $COMMAND_ID"
+          echo "Esperando a que termine la ejecución en el clúster..."
+          
+          # Ciclo corregido usando list-commands con filtro de ID
+          while [ "$(aws ssm list-commands --command-id "$COMMAND_ID" --query "Commands[0].Status" --output text)" = "Pending" ] || \
+                [ "$(aws ssm list-commands --command-id "$COMMAND_ID" --query "Commands[0].Status" --output text)" = "InProgress" ]; do
+            sleep 5
+          done
+          
+          STATUS=$(aws ssm list-commands --command-id "$COMMAND_ID" --query "Commands[0].Status" --output text)
+          echo "Despliegue finalizado con estado: $STATUS"
+          
+          if [ "$STATUS" != "Success" ]; then
+            echo "El despliegue falló en AWS Systems Manager. Revisa la consola de AWS para ver los logs."
+            exit 1
+          fi
 ```
 
 > **Flujo de autenticación OIDC:**
